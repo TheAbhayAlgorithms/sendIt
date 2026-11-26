@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -59,7 +59,11 @@
           </div>
         </div>
       </div>
-      <div style="display: flex; gap: 8px;">
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <button type="button" class="theme-toggle" data-theme-toggle aria-label="Toggle theme">
+          <span class="theme-icon"></span>
+          <span class="theme-label">Dark</span>
+        </button>
         <a href="/" class="btn btn-secondary btn-sm" style="text-decoration: none;">Open Chat App</a>
         <button id="admin-logout-btn" class="btn btn-secondary btn-sm">Lock Console</button>
       </div>

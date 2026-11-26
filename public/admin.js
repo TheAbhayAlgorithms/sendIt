@@ -236,6 +236,33 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
+const MOON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>';
+const SUN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2m-7.07-14.07 1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2m-14.07 7.07 1.41-1.41m11.32-11.32 1.41-1.41"/></svg>';
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('sendit_theme', theme);
+  document.querySelectorAll('[data-theme-toggle]').forEach((btn) => {
+    const icon = btn.querySelector('.theme-icon');
+    const label = btn.querySelector('.theme-label');
+    if (theme === 'dark') {
+      if (icon) icon.innerHTML = SUN_SVG;
+      if (label) label.textContent = 'Light';
+    } else {
+      if (icon) icon.innerHTML = MOON_SVG;
+      if (label) label.textContent = 'Dark';
+    }
+  });
+}
+
+applyTheme(localStorage.getItem('sendit_theme') || 'light');
+document.querySelectorAll('[data-theme-toggle]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const current = document.documentElement.getAttribute('data-theme') || 'light';
+    applyTheme(current === 'dark' ? 'light' : 'dark');
+  });
+});
+
 // Check existing admin session on load
 (async () => {
   try {
