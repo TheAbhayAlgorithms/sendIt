@@ -47,8 +47,13 @@ export function createApp(options = {}) {
   const adminSecret = options.adminSecret || resolveAdminSecret(options.dataDir);
 
   const app = express();
+  app.set('trust proxy', 1);
   app.use(express.json({ limit: '64kb' }));
   app.use(express.static(PUBLIC_DIR, { extensions: ['html'] }));
+
+  app.get('/healthz', (req, res) => {
+    res.json({ ok: true });
+  });
 
   // Map<userId, Set<WebSocket>>
   const onlineSockets = new Map();
@@ -462,6 +467,64 @@ export function createApp(options = {}) {
     res.json({ messages });
   });
 
+  app.post('/api/chat/messages', requireUser, (req, res) => {
+    const content = typeof req.body?.content === 'string' ? req.body.content.trim() : '';
+    if (!content || content.length > 2000) {
+      return res.status(400).json({ error: 'Message content must be 1-2000 characters' });
+    }
+
+    const channelId = typeof req.body?.channelId === 'string' ? req.body.channelId.trim() : '';
+    const recipientId = typeof req.body?.recipientId === 'string' ? req.body.recipientId.trim() : '';
+    const createdAt = new Date().toISOString();
+
+    if (channelId) {
+      const channel = db.prepare('SELECT id FROM channels WHERE id = ?').get(channelId);
+      if (!channel) return res.status(404).json({ error: 'Channel not found' });
+
+      const result = db
+        .prepare('INSERT INTO messages (sender_id, channel_id, recipient_id, content, created_at) VALUES (?, ?, NULL, ?, ?)')
+        .run(req.user.user_id, channel.id, content, createdAt);
+
+      const message = {
+        id: Number(result.lastInsertRowid),
+        senderId: req.user.user_id,
+        senderName: req.user.display_name,
+        channelId: channel.id,
+        recipientId: null,
+        content,
+        createdAt,
+      };
+      broadcastAll({ type: 'message', message });
+      return res.status(201).json({ message });
+    }
+
+    if (recipientId) {
+      const peer = db.prepare('SELECT user_id, is_active FROM users WHERE user_id = ?').get(recipientId);
+      if (!peer || !peer.is_active) return res.status(404).json({ error: 'Recipient not found' });
+
+      const result = db
+        .prepare('INSERT INTO messages (sender_id, channel_id, recipient_id, content, created_at) VALUES (?, NULL, ?, ?, ?)')
+        .run(req.user.user_id, peer.user_id, content, createdAt);
+
+      const message = {
+        id: Number(result.lastInsertRowid),
+        senderId: req.user.user_id,
+        senderName: req.user.display_name,
+        channelId: null,
+        recipientId: peer.user_id,
+        content,
+        createdAt,
+      };
+      sendToUser(req.user.user_id, { type: 'message', message });
+      if (peer.user_id !== req.user.user_id) {
+        sendToUser(peer.user_id, { type: 'message', message });
+      }
+      return res.status(201).json({ message });
+    }
+
+    return res.status(400).json({ error: 'Provide channelId or recipientId' });
+  });
+
   // Explicit route for /admin without .html
   app.get('/admin', (req, res) => {
     res.sendFile(path.join(PUBLIC_DIR, 'admin.html'));
@@ -493,6 +556,11 @@ export function createApp(options = {}) {
   });
 
   wss.on('connection', (ws, user) => {
+    ws.isAlive = true;
+    ws.on('pong', () => {
+      ws.isAlive = true;
+    });
+
     const userId = user.user_id;
     if (!onlineSockets.has(userId)) {
       onlineSockets.set(userId, new Set());
@@ -609,6 +677,21 @@ export function createApp(options = {}) {
       }
     });
   });
+
+  // Keep WebSocket connections alive across reverse proxies (Render, Railway, Nginx, Cloudflare)
+  const heartbeat = setInterval(() => {
+    for (const ws of wss.clients) {
+      if (ws.isAlive === false) {
+        ws.terminate();
+        continue;
+      }
+      ws.isAlive = false;
+      ws.ping();
+    }
+  }, 25000);
+  heartbeat.unref();
+
+  wss.on('close', () => clearInterval(heartbeat));
 
   return { app, server, wss, db, adminSecret };
 }

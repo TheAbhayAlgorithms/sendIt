@@ -33,6 +33,8 @@ const state = {
   typingUsers: new Map(), // userId -> { displayName, timeoutId }
   ws: null,
   reconnectTimer: null,
+  wsFailures: 0,
+  pollTimer: null,
 };
 
 function targetKey(type, id) {
@@ -101,11 +103,16 @@ function teardownChat(notice) {
     clearTimeout(state.reconnectTimer);
     state.reconnectTimer = null;
   }
+  if (state.pollTimer) {
+    clearInterval(state.pollTimer);
+    state.pollTimer = null;
+  }
   if (state.ws) {
     state.ws.onclose = null;
     state.ws.close();
     state.ws = null;
   }
+  state.wsFailures = 0;
   state.user = null;
   chatView.classList.add('hidden');
   loginView.classList.remove('hidden');
@@ -299,6 +306,11 @@ function connectWebSocket() {
   state.ws = ws;
 
   ws.onopen = () => {
+    state.wsFailures = 0;
+    if (state.pollTimer) {
+      clearInterval(state.pollTimer);
+      state.pollTimer = null;
+    }
     wsStatus.textContent = 'Connected';
     wsStatus.classList.remove('disconnected');
   };
@@ -390,10 +402,31 @@ function connectWebSocket() {
 
   ws.onclose = (evt) => {
     if (!state.user || evt.code === 4001) return;
+    state.wsFailures += 1;
+    if (state.wsFailures >= 3) {
+      startHttpPollingFallback();
+      return;
+    }
     wsStatus.textContent = 'Reconnecting...';
     wsStatus.classList.add('disconnected');
     state.reconnectTimer = setTimeout(connectWebSocket, 2500);
   };
+}
+
+function startHttpPollingFallback() {
+  wsStatus.textContent = 'Live (HTTP)';
+  wsStatus.classList.remove('disconnected');
+  if (state.pollTimer) return;
+  state.pollTimer = setInterval(async () => {
+    if (!state.user) return;
+    try {
+      await loadMessages();
+    } catch (err) {
+      if (err.message.includes('401') || err.message.includes('Authentication')) {
+        teardownChat('Session expired. Please sign in again.');
+      }
+    }
+  }, 3000);
 }
 
 function renderTypingBar() {
@@ -431,19 +464,33 @@ messageInput.addEventListener('keydown', (e) => {
   }
 });
 
-composerForm.addEventListener('submit', (e) => {
+composerForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const content = messageInput.value.trim();
-  if (!content || !state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+  if (!content) return;
 
   const payload =
     state.activeTarget.type === 'channel'
-      ? { type: 'send_message', channelId: state.activeTarget.id, content }
-      : { type: 'send_message', recipientId: state.activeTarget.id, content };
+      ? { channelId: state.activeTarget.id, content }
+      : { recipientId: state.activeTarget.id, content };
 
-  state.ws.send(JSON.stringify(payload));
-  messageInput.value = '';
-  clearTimeout(typingStopTimer);
+  if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+    state.ws.send(JSON.stringify({ type: 'send_message', ...payload }));
+    messageInput.value = '';
+    clearTimeout(typingStopTimer);
+  } else {
+    try {
+      const { message } = await api('/api/chat/messages', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      messageInput.value = '';
+      appendMessageElement(message);
+      scrollToBottom();
+    } catch (err) {
+      showError(err.message);
+    }
+  }
 });
 
 function escapeHtml(str) {

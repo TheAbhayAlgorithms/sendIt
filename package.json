@@ -4,6 +4,9 @@
   "description": "Invite-only real-time chat application with admin-provisioned User IDs and PINs",
   "main": "server.js",
   "type": "module",
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
