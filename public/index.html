@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SendIt — Private Workspace Chat</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <!-- Login-Only View (No Create Account / Sign Up) -->
+  <section id="login-view" class="auth-screen">
+    <div class="auth-card">
+      <div class="brand">
+        <div class="brand-icon">S</div>
+        <h1>SendIt</h1>
+      </div>
+      <p class="auth-subtitle">Sign in with the User ID and PIN provided by your administrator.</p>
+
+      <div id="login-error" class="alert alert-error hidden"></div>
+
+      <form id="login-form" class="auth-form" autocomplete="off">
+        <div class="field">
+          <label for="login-userid">User ID</label>
+          <input
+            id="login-userid"
+            class="input mono"
+            type="text"
+            placeholder="e.g. USR-4829"
+            required
+            autofocus
+          />
+        </div>
+
+        <div class="field">
+          <label for="login-pin">PIN / Access Code</label>
+          <div class="input-group">
+            <input
+              id="login-pin"
+              class="input mono"
+              type="password"
+              placeholder="Enter your PIN"
+              required
+            />
+            <button type="button" id="toggle-pin-btn" class="btn btn-secondary">Show</button>
+          </div>
+        </div>
+
+        <button type="submit" id="login-submit" class="btn btn-primary">Sign In</button>
+      </form>
+
+      <p class="auth-note">
+        Invite-only workspace. Self-registration is disabled.<br />
+        <a href="/admin">Administrator Console</a>
+      </p>
+    </div>
+  </section>
+
+  <!-- Main Chat View -->
+  <section id="chat-view" class="chat-layout hidden">
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand" style="margin-bottom: 0;">
+          <div class="brand-icon" style="width: 30px; height: 30px; font-size: 15px;">S</div>
+          <h1 style="font-size: 18px;">SendIt</h1>
+        </div>
+        <button id="close-sidebar-btn" class="btn btn-secondary btn-sm mobile-menu-btn">Close</button>
+      </div>
+
+      <div class="sidebar-scroll">
+        <div class="nav-section-title">Channels</div>
+        <div id="channels-list" class="nav-list"></div>
+
+        <div class="nav-section-title">Direct Messages</div>
+        <div id="users-list" class="nav-list"></div>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="me-info">
+          <div id="me-name" class="me-name"></div>
+          <div id="me-id" class="me-id"></div>
+        </div>
+        <button id="logout-btn" class="btn btn-secondary btn-sm">Logout</button>
+      </div>
+    </aside>
+
+    <main class="chat-main">
+      <header class="chat-header">
+        <div class="chat-header-left">
+          <button id="open-sidebar-btn" class="btn btn-secondary btn-sm mobile-menu-btn">Menu</button>
+          <div>
+            <div id="chat-title" class="chat-title">#general</div>
+            <div id="chat-subtitle" class="chat-subtitle">Workspace-wide chat</div>
+          </div>
+        </div>
+        <span id="ws-status" class="ws-pill">Connected</span>
+      </header>
+
+      <div id="messages-container" class="messages-container"></div>
+      <div id="typing-bar" class="typing-bar"></div>
+
+      <form id="composer-form" class="composer">
+        <textarea
+          id="message-input"
+          rows="1"
+          placeholder="Write a message..."
+          maxlength="2000"
+        ></textarea>
+        <button type="submit" class="btn btn-primary">Send</button>
+      </form>
+    </main>
+  </section>
+
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SendIt — Admin Console</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <!-- Admin Login -->
+  <section id="admin-login-view" class="auth-screen">
+    <div class="auth-card">
+      <div class="brand">
+        <div class="brand-icon">A</div>
+        <h1>SendIt Admin</h1>
+      </div>
+      <p class="auth-subtitle">Enter the administrator key to manage users, User IDs, and PINs.</p>
+
+      <div id="admin-login-error" class="alert alert-error hidden"></div>
+
+      <form id="admin-login-form" class="auth-form">
+        <div class="field">
+          <label for="admin-secret-input">Admin Key</label>
+          <input
+            id="admin-secret-input"
+            class="input mono"
+            type="password"
+            placeholder="Enter admin key"
+            required
+            autofocus
+          />
+        </div>
+        <button type="submit" class="btn btn-primary">Unlock Console</button>
+      </form>
+
+      <p class="auth-note">
+        <a href="/">Back to User Login</a>
+      </p>
+    </div>
+  </section>
+
+  <!-- Admin Dashboard -->
+  <section id="admin-dashboard-view" class="admin-shell hidden">
+    <div class="admin-topbar">
+      <div class="brand" style="margin-bottom: 0;">
+        <div class="brand-icon">A</div>
+        <div>
+          <h1 style="font-size: 20px;">SendIt Admin Console</h1>
+          <div style="font-size: 13px; color: var(--text-muted);">
+            Add approved users and issue unique User IDs + PINs
+          </div>
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <a href="/" class="btn btn-secondary btn-sm" style="text-decoration: none;">Open Chat App</a>
+        <button id="admin-logout-btn" class="btn btn-secondary btn-sm">Lock Console</button>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total Users</div>
+        <div id="stat-total" class="stat-value">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Active Accounts</div>
+        <div id="stat-active" class="stat-value">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Online Now</div>
+        <div id="stat-online" class="stat-value" style="color: var(--emerald);">0</div>
+      </div>
+    </div>
+
+    <!-- Add User Panel -->
+    <div class="panel">
+      <h2>Add Approved User</h2>
+      <div id="add-user-error" class="alert alert-error hidden"></div>
+
+      <form id="add-user-form" class="form-grid" autocomplete="off">
+        <div class="field">
+          <label for="new-display-name">Display Name *</label>
+          <input id="new-display-name" class="input" type="text" placeholder="e.g. Alex Rivera" required />
+        </div>
+        <div class="field">
+          <label for="new-user-id">Custom User ID (optional)</label>
+          <input id="new-user-id" class="input mono" type="text" placeholder="Auto: USR-XXXX" />
+        </div>
+        <div class="field">
+          <label for="new-pin">PIN / Access Code (optional)</label>
+          <input id="new-pin" class="input mono" type="text" placeholder="Auto: 6-digit PIN" />
+        </div>
+        <button type="submit" class="btn btn-primary">Create User &amp; Issue PIN</button>
+      </form>
+
+      <div id="credentials-box" class="credentials-box hidden">
+        <div>
+          <strong id="cred-heading">User credentials ready to share</strong>
+          <div class="cred-values">
+            User ID: <span id="cred-userid"></span> &nbsp;|&nbsp; PIN: <span id="cred-pin"></span>
+          </div>
+        </div>
+        <button id="copy-cred-btn" class="btn btn-secondary btn-sm">Copy Credentials</button>
+      </div>
+    </div>
+
+    <!-- Users Table -->
+    <div class="panel">
+      <h2>Approved Users</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>User ID</th>
+              <th>Name</th>
+              <th>Status</th>
+              <th>Presence</th>
+              <th>Last Seen</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="users-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Channels Panel -->
+    <div class="panel">
+      <h2>Channels</h2>
+      <div id="channel-error" class="alert alert-error hidden"></div>
+      <form id="add-channel-form" class="form-grid" style="margin-bottom: 14px;">
+        <div class="field">
+          <label for="new-channel-name">Channel Name</label>
+          <input id="new-channel-name" class="input mono" type="text" placeholder="e.g. engineering" required />
+        </div>
+        <div class="field">
+          <label for="new-channel-desc">Description</label>
+          <input id="new-channel-desc" class="input" type="text" placeholder="Optional topic" />
+        </div>
+        <button type="submit" class="btn btn-secondary">Create Channel</button>
+      </form>
+      <div id="channels-summary" style="font-size: 13px; color: var(--text-muted);"></div>
+    </div>
+  </section>
+
+  <script src="/admin.js"></script>
+</body>
+</html>
