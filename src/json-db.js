@@ -188,6 +188,12 @@ export function createJsonDatabase(dbPath) {
             persist();
             return { changes: 1 };
           }
+          if (sql.startsWith('DELETE FROM channels WHERE id = ?')) {
+            state.channels = state.channels.filter((c) => !eqNoCase(c.id, args[0]));
+            state.messages = state.messages.filter((m) => !m.channel_id || !eqNoCase(m.channel_id, args[0]));
+            persist();
+            return { changes: 1 };
+          }
           if (sql.startsWith('INSERT INTO messages (sender_id, channel_id, recipient_id, content, created_at) VALUES (?, ?, NULL, ?, ?)')) {
             const [sender_id, channel_id, content, created_at] = args;
             const id = state.nextMessageId++;

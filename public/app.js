@@ -18,7 +18,6 @@ const logoutBtn = document.getElementById('logout-btn');
 
 const chatTitle = document.getElementById('chat-title');
 const chatSubtitle = document.getElementById('chat-subtitle');
-const wsStatus = document.getElementById('ws-status');
 const messagesContainer = document.getElementById('messages-container');
 const typingBar = document.getElementById('typing-bar');
 const composerForm = document.getElementById('composer-form');
@@ -316,8 +315,6 @@ function connectWebSocket() {
       clearInterval(state.pollTimer);
       state.pollTimer = null;
     }
-    wsStatus.textContent = 'Connected';
-    wsStatus.classList.remove('disconnected');
   };
 
   ws.onmessage = async (event) => {
@@ -412,15 +409,11 @@ function connectWebSocket() {
       startHttpPollingFallback();
       return;
     }
-    wsStatus.textContent = 'Reconnecting...';
-    wsStatus.classList.add('disconnected');
     state.reconnectTimer = setTimeout(connectWebSocket, 2500);
   };
 }
 
 function startHttpPollingFallback() {
-  wsStatus.textContent = 'Live (HTTP)';
-  wsStatus.classList.remove('disconnected');
   if (state.pollTimer) return;
   state.pollTimer = setInterval(async () => {
     if (!state.user) return;

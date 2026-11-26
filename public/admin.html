@@ -151,7 +151,18 @@
         </div>
         <button type="submit" class="btn btn-secondary">Create Channel</button>
       </form>
-      <div id="channels-summary" style="font-size: 13px; color: var(--text-muted);"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Channel</th>
+              <th>Description</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="channels-tbody"></tbody>
+        </table>
+      </div>
     </div>
   </section>
 

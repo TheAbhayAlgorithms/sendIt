@@ -389,6 +389,22 @@ export function createApp(options = {}) {
     res.status(201).json({ channel });
   });
 
+  app.delete('/api/admin/channels/:channelId', requireAdmin, async (req, res) => {
+    const channelId = String(req.params.channelId || '').trim().toLowerCase();
+    if (channelId === 'general') {
+      return res.status(400).json({ error: 'Cannot delete the default #general channel' });
+    }
+
+    const channel = await db.get('SELECT id FROM channels WHERE id = ?', [channelId]);
+    if (!channel) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    await db.run('DELETE FROM channels WHERE id = ?', [channel.id]);
+    broadcastAll({ type: 'channels_updated' });
+    res.json({ ok: true });
+  });
+
   // -------------------- Chat API --------------------
 
   app.get('/api/chat/bootstrap', requireUser, async (req, res) => {
