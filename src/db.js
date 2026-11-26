@@ -1,18 +1,34 @@
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { createJsonDatabase } from './json-db.js';
+
+const require = createRequire(import.meta.url);
+
+function loadSqlite() {
+  try {
+    return require('node:sqlite').DatabaseSync;
+  } catch {
+    return null;
+  }
+}
 
 const DEFAULT_DB_PATH = process.env.VERCEL
   ? path.join('/tmp', 'sendit-data', 'sendit.db')
   : path.join(process.cwd(), 'data', 'sendit.db');
 
 /**
- * Opens and initializes the SQLite database with required schema.
+ * Opens and initializes the SQLite database (with pure-JS JSON fallback if node:sqlite is unavailable).
  * @param {string} dbPath
  */
 export function createDatabase(dbPath = DEFAULT_DB_PATH) {
   if (dbPath !== ':memory:') {
     fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+  }
+
+  const DatabaseSync = loadSqlite();
+  if (!DatabaseSync) {
+    return createJsonDatabase(dbPath);
   }
 
   const db = new DatabaseSync(dbPath);
