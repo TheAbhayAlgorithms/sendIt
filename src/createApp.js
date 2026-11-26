@@ -100,9 +100,9 @@ export function createApp(options = {}) {
     }
   }
 
-  function requireUser(req, res, next) {
+  async function requireUser(req, res, next) {
     const cookies = parseCookies(req.headers.cookie);
-    const session = getSession(db, cookies[USER_COOKIE], 'user');
+    const session = await getSession(db, cookies[USER_COOKIE], 'user');
     if (!session) {
       return res.status(401).json({ error: 'Authentication required' });
     }
@@ -111,9 +111,9 @@ export function createApp(options = {}) {
     next();
   }
 
-  function requireAdmin(req, res, next) {
+  async function requireAdmin(req, res, next) {
     const cookies = parseCookies(req.headers.cookie);
-    const session = getSession(db, cookies[ADMIN_COOKIE], 'admin');
+    const session = await getSession(db, cookies[ADMIN_COOKIE], 'admin');
     if (!session) {
       return res.status(401).json({ error: 'Admin authentication required' });
     }
@@ -123,7 +123,7 @@ export function createApp(options = {}) {
 
   // -------------------- User Auth (Login Only — No Registration) --------------------
 
-  app.post('/api/auth/login', (req, res) => {
+  app.post('/api/auth/login', async (req, res) => {
     const userIdInput = typeof req.body?.userId === 'string' ? req.body.userId.trim() : '';
     const pinInput = typeof req.body?.pin === 'string' ? req.body.pin.trim() : '';
 
@@ -131,9 +131,10 @@ export function createApp(options = {}) {
       return res.status(400).json({ error: 'User ID and PIN are required' });
     }
 
-    const user = db
-      .prepare('SELECT user_id, display_name, pin_hash, pin_salt, is_active FROM users WHERE user_id = ?')
-      .get(userIdInput);
+    const user = await db.get(
+      'SELECT user_id, display_name, pin_hash, pin_salt, is_active FROM users WHERE user_id = ?',
+      [userIdInput]
+    );
 
     if (!user || !verifyPin(pinInput, user.pin_salt, user.pin_hash)) {
       return res.status(401).json({ error: 'Invalid User ID or PIN' });
@@ -144,9 +145,9 @@ export function createApp(options = {}) {
     }
 
     const now = new Date().toISOString();
-    db.prepare('UPDATE users SET last_seen_at = ? WHERE user_id = ?').run(now, user.user_id);
+    await db.run('UPDATE users SET last_seen_at = ? WHERE user_id = ?', [now, user.user_id]);
 
-    const { rawToken, expiresAt } = createSession(db, { userId: user.user_id, role: 'user' });
+    const { rawToken, expiresAt } = await createSession(db, { userId: user.user_id, role: 'user' });
     setAuthCookie(res, USER_COOKIE, rawToken, expiresAt);
 
     res.json({
@@ -157,9 +158,9 @@ export function createApp(options = {}) {
     });
   });
 
-  app.post('/api/auth/logout', (req, res) => {
+  app.post('/api/auth/logout', async (req, res) => {
     const cookies = parseCookies(req.headers.cookie);
-    deleteSession(db, cookies[USER_COOKIE]);
+    await deleteSession(db, cookies[USER_COOKIE]);
     clearAuthCookie(res, USER_COOKIE);
     res.json({ ok: true });
   });
@@ -175,19 +176,19 @@ export function createApp(options = {}) {
 
   // -------------------- Admin Auth --------------------
 
-  app.post('/api/admin/login', (req, res) => {
+  app.post('/api/admin/login', async (req, res) => {
     const secret = typeof req.body?.secret === 'string' ? req.body.secret.trim() : '';
     if (!verifyAdminSecret(secret, adminSecret)) {
       return res.status(401).json({ error: 'Invalid admin key' });
     }
-    const { rawToken, expiresAt } = createSession(db, { role: 'admin' });
+    const { rawToken, expiresAt } = await createSession(db, { role: 'admin' });
     setAuthCookie(res, ADMIN_COOKIE, rawToken, expiresAt);
     res.json({ ok: true });
   });
 
-  app.post('/api/admin/logout', (req, res) => {
+  app.post('/api/admin/logout', async (req, res) => {
     const cookies = parseCookies(req.headers.cookie);
-    deleteSession(db, cookies[ADMIN_COOKIE]);
+    await deleteSession(db, cookies[ADMIN_COOKIE]);
     clearAuthCookie(res, ADMIN_COOKIE);
     res.json({ ok: true });
   });
@@ -198,10 +199,10 @@ export function createApp(options = {}) {
 
   // -------------------- Admin User & Channel Management --------------------
 
-  app.get('/api/admin/users', requireAdmin, (req, res) => {
-    const rows = db
-      .prepare('SELECT user_id, display_name, is_active, created_at, last_seen_at FROM users ORDER BY created_at DESC')
-      .all();
+  app.get('/api/admin/users', requireAdmin, async (req, res) => {
+    const rows = await db.all(
+      'SELECT user_id, display_name, is_active, created_at, last_seen_at FROM users ORDER BY created_at DESC'
+    );
 
     const users = rows.map((u) => ({
       userId: u.user_id,
@@ -215,7 +216,7 @@ export function createApp(options = {}) {
     res.json({ users });
   });
 
-  app.post('/api/admin/users', requireAdmin, (req, res) => {
+  app.post('/api/admin/users', requireAdmin, async (req, res) => {
     const displayName = typeof req.body?.displayName === 'string' ? req.body.displayName.trim() : '';
     const customUserId = typeof req.body?.userId === 'string' ? req.body.userId.trim() : '';
     const customPin = typeof req.body?.pin === 'string' ? req.body.pin.trim() : '';
@@ -231,12 +232,12 @@ export function createApp(options = {}) {
           error: 'User ID must be 3-24 characters (letters, numbers, hyphens, underscores)',
         });
       }
-      const exists = db.prepare('SELECT 1 FROM users WHERE user_id = ?').get(userId);
+      const exists = await db.get('SELECT 1 FROM users WHERE user_id = ?', [userId]);
       if (exists) {
         return res.status(409).json({ error: `User ID "${userId}" is already taken` });
       }
     } else {
-      userId = generateUserId(db);
+      userId = await generateUserId(db);
     }
 
     let pin = customPin;
@@ -251,9 +252,10 @@ export function createApp(options = {}) {
     const { salt, hash } = hashPin(pin);
     const createdAt = new Date().toISOString();
 
-    db.prepare(
-      'INSERT INTO users (user_id, display_name, pin_hash, pin_salt, is_active, created_at) VALUES (?, ?, ?, ?, 1, ?)'
-    ).run(userId, displayName, hash, salt, createdAt);
+    await db.run(
+      'INSERT INTO users (user_id, display_name, pin_hash, pin_salt, is_active, created_at) VALUES (?, ?, ?, ?, 1, ?)',
+      [userId, displayName, hash, salt, createdAt]
+    );
 
     broadcastAll({ type: 'users_updated' });
 
@@ -273,9 +275,9 @@ export function createApp(options = {}) {
     });
   });
 
-  app.patch('/api/admin/users/:userId', requireAdmin, (req, res) => {
+  app.patch('/api/admin/users/:userId', requireAdmin, async (req, res) => {
     const targetId = req.params.userId;
-    const user = db.prepare('SELECT user_id, display_name, is_active FROM users WHERE user_id = ?').get(targetId);
+    const user = await db.get('SELECT user_id, display_name, is_active FROM users WHERE user_id = ?', [targetId]);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -288,14 +290,14 @@ export function createApp(options = {}) {
     const nextActive =
       typeof req.body?.isActive === 'boolean' ? (req.body.isActive ? 1 : 0) : user.is_active;
 
-    db.prepare('UPDATE users SET display_name = ?, is_active = ? WHERE user_id = ?').run(
+    await db.run('UPDATE users SET display_name = ?, is_active = ? WHERE user_id = ?', [
       nextDisplayName,
       nextActive,
-      user.user_id
-    );
+      user.user_id,
+    ]);
 
     if (nextActive === 0) {
-      deleteUserSessions(db, user.user_id);
+      await deleteUserSessions(db, user.user_id);
       kickUser(user.user_id, 'Your account was disabled by the administrator.');
     }
 
@@ -310,9 +312,9 @@ export function createApp(options = {}) {
     });
   });
 
-  app.post('/api/admin/users/:userId/reset-pin', requireAdmin, (req, res) => {
+  app.post('/api/admin/users/:userId/reset-pin', requireAdmin, async (req, res) => {
     const targetId = req.params.userId;
-    const user = db.prepare('SELECT user_id FROM users WHERE user_id = ?').get(targetId);
+    const user = await db.get('SELECT user_id FROM users WHERE user_id = ?', [targetId]);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -328,9 +330,9 @@ export function createApp(options = {}) {
     }
 
     const { salt, hash } = hashPin(pin);
-    db.prepare('UPDATE users SET pin_hash = ?, pin_salt = ? WHERE user_id = ?').run(hash, salt, user.user_id);
+    await db.run('UPDATE users SET pin_hash = ?, pin_salt = ? WHERE user_id = ?', [hash, salt, user.user_id]);
 
-    deleteUserSessions(db, user.user_id);
+    await deleteUserSessions(db, user.user_id);
     kickUser(user.user_id, 'Your PIN was reset by the administrator. Please sign in with your new PIN.');
 
     res.json({
@@ -341,26 +343,26 @@ export function createApp(options = {}) {
     });
   });
 
-  app.delete('/api/admin/users/:userId', requireAdmin, (req, res) => {
+  app.delete('/api/admin/users/:userId', requireAdmin, async (req, res) => {
     const targetId = req.params.userId;
-    const user = db.prepare('SELECT user_id FROM users WHERE user_id = ?').get(targetId);
+    const user = await db.get('SELECT user_id FROM users WHERE user_id = ?', [targetId]);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     kickUser(user.user_id, 'Your account was removed by the administrator.');
-    db.prepare('DELETE FROM users WHERE user_id = ?').run(user.user_id);
+    await db.run('DELETE FROM users WHERE user_id = ?', [user.user_id]);
     broadcastAll({ type: 'users_updated' });
 
     res.json({ ok: true });
   });
 
-  app.get('/api/admin/channels', requireAdmin, (req, res) => {
-    const channels = db.prepare('SELECT id, name, description, created_at FROM channels ORDER BY created_at ASC').all();
+  app.get('/api/admin/channels', requireAdmin, async (req, res) => {
+    const channels = await db.all('SELECT id, name, description, created_at FROM channels ORDER BY created_at ASC');
     res.json({ channels });
   });
 
-  app.post('/api/admin/channels', requireAdmin, (req, res) => {
+  app.post('/api/admin/channels', requireAdmin, async (req, res) => {
     const rawName = typeof req.body?.name === 'string' ? req.body.name.trim().toLowerCase() : '';
     const description = typeof req.body?.description === 'string' ? req.body.description.trim().slice(0, 120) : '';
     const slug = rawName.replace(/\s+/g, '-');
@@ -369,18 +371,18 @@ export function createApp(options = {}) {
       return res.status(400).json({ error: 'Channel name must be 2-30 lowercase letters, numbers, or hyphens' });
     }
 
-    const exists = db.prepare('SELECT 1 FROM channels WHERE id = ?').get(slug);
+    const exists = await db.get('SELECT 1 FROM channels WHERE id = ?', [slug]);
     if (exists) {
       return res.status(409).json({ error: `Channel #${slug} already exists` });
     }
 
     const createdAt = new Date().toISOString();
-    db.prepare('INSERT INTO channels (id, name, description, created_at) VALUES (?, ?, ?, ?)').run(
+    await db.run('INSERT INTO channels (id, name, description, created_at) VALUES (?, ?, ?, ?)', [
       slug,
       slug,
       description,
-      createdAt
-    );
+      createdAt,
+    ]);
 
     const channel = { id: slug, name: slug, description, created_at: createdAt };
     broadcastAll({ type: 'channels_updated', channel });
@@ -389,11 +391,11 @@ export function createApp(options = {}) {
 
   // -------------------- Chat API --------------------
 
-  app.get('/api/chat/bootstrap', requireUser, (req, res) => {
-    const channels = db.prepare('SELECT id, name, description FROM channels ORDER BY created_at ASC').all();
-    const userRows = db
-      .prepare('SELECT user_id, display_name, last_seen_at FROM users WHERE is_active = 1 ORDER BY display_name ASC')
-      .all();
+  app.get('/api/chat/bootstrap', requireUser, async (req, res) => {
+    const channels = await db.all('SELECT id, name, description FROM channels ORDER BY created_at ASC');
+    const userRows = await db.all(
+      'SELECT user_id, display_name, last_seen_at FROM users WHERE is_active = 1 ORDER BY display_name ASC'
+    );
 
     const onlineSet = new Set(getOnlineUserIds());
     const users = userRows.map((u) => ({
@@ -413,7 +415,7 @@ export function createApp(options = {}) {
     });
   });
 
-  app.get('/api/chat/messages', requireUser, (req, res) => {
+  app.get('/api/chat/messages', requireUser, async (req, res) => {
     const channelId = typeof req.query.channelId === 'string' ? req.query.channelId.trim() : '';
     const dmWith = typeof req.query.dmWith === 'string' ? req.query.dmWith.trim() : '';
     const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 50));
@@ -424,34 +426,32 @@ export function createApp(options = {}) {
 
     let rows;
     if (channelId) {
-      const channel = db.prepare('SELECT id FROM channels WHERE id = ?').get(channelId);
+      const channel = await db.get('SELECT id FROM channels WHERE id = ?', [channelId]);
       if (!channel) return res.status(404).json({ error: 'Channel not found' });
 
-      rows = db
-        .prepare(
-          `SELECT m.id, m.sender_id, u.display_name AS sender_name, m.channel_id, m.recipient_id, m.content, m.created_at
-           FROM messages m
-           JOIN users u ON u.user_id = m.sender_id
-           WHERE m.channel_id = ?
-           ORDER BY m.id DESC
-           LIMIT ?`
-        )
-        .all(channel.id, limit);
+      rows = await db.all(
+        `SELECT m.id, m.sender_id, u.display_name AS sender_name, m.channel_id, m.recipient_id, m.content, m.created_at
+         FROM messages m
+         JOIN users u ON u.user_id = m.sender_id
+         WHERE m.channel_id = ?
+         ORDER BY m.id DESC
+         LIMIT ?`,
+        [channel.id, limit]
+      );
     } else {
-      const peer = db.prepare('SELECT user_id FROM users WHERE user_id = ?').get(dmWith);
+      const peer = await db.get('SELECT user_id FROM users WHERE user_id = ?', [dmWith]);
       if (!peer) return res.status(404).json({ error: 'User not found' });
 
-      rows = db
-        .prepare(
-          `SELECT m.id, m.sender_id, u.display_name AS sender_name, m.channel_id, m.recipient_id, m.content, m.created_at
-           FROM messages m
-           JOIN users u ON u.user_id = m.sender_id
-           WHERE m.channel_id IS NULL
-             AND ((m.sender_id = ? AND m.recipient_id = ?) OR (m.sender_id = ? AND m.recipient_id = ?))
-           ORDER BY m.id DESC
-           LIMIT ?`
-        )
-        .all(req.user.user_id, peer.user_id, peer.user_id, req.user.user_id, limit);
+      rows = await db.all(
+        `SELECT m.id, m.sender_id, u.display_name AS sender_name, m.channel_id, m.recipient_id, m.content, m.created_at
+         FROM messages m
+         JOIN users u ON u.user_id = m.sender_id
+         WHERE m.channel_id IS NULL
+           AND ((m.sender_id = ? AND m.recipient_id = ?) OR (m.sender_id = ? AND m.recipient_id = ?))
+         ORDER BY m.id DESC
+         LIMIT ?`,
+        [req.user.user_id, peer.user_id, peer.user_id, req.user.user_id, limit]
+      );
     }
 
     const messages = rows.reverse().map((r) => ({
@@ -467,7 +467,7 @@ export function createApp(options = {}) {
     res.json({ messages });
   });
 
-  app.post('/api/chat/messages', requireUser, (req, res) => {
+  app.post('/api/chat/messages', requireUser, async (req, res) => {
     const content = typeof req.body?.content === 'string' ? req.body.content.trim() : '';
     if (!content || content.length > 2000) {
       return res.status(400).json({ error: 'Message content must be 1-2000 characters' });
@@ -478,12 +478,13 @@ export function createApp(options = {}) {
     const createdAt = new Date().toISOString();
 
     if (channelId) {
-      const channel = db.prepare('SELECT id FROM channels WHERE id = ?').get(channelId);
+      const channel = await db.get('SELECT id FROM channels WHERE id = ?', [channelId]);
       if (!channel) return res.status(404).json({ error: 'Channel not found' });
 
-      const result = db
-        .prepare('INSERT INTO messages (sender_id, channel_id, recipient_id, content, created_at) VALUES (?, ?, NULL, ?, ?)')
-        .run(req.user.user_id, channel.id, content, createdAt);
+      const result = await db.run(
+        'INSERT INTO messages (sender_id, channel_id, recipient_id, content, created_at) VALUES (?, ?, NULL, ?, ?)',
+        [req.user.user_id, channel.id, content, createdAt]
+      );
 
       const message = {
         id: Number(result.lastInsertRowid),
@@ -499,12 +500,13 @@ export function createApp(options = {}) {
     }
 
     if (recipientId) {
-      const peer = db.prepare('SELECT user_id, is_active FROM users WHERE user_id = ?').get(recipientId);
+      const peer = await db.get('SELECT user_id, is_active FROM users WHERE user_id = ?', [recipientId]);
       if (!peer || !peer.is_active) return res.status(404).json({ error: 'Recipient not found' });
 
-      const result = db
-        .prepare('INSERT INTO messages (sender_id, channel_id, recipient_id, content, created_at) VALUES (?, NULL, ?, ?, ?)')
-        .run(req.user.user_id, peer.user_id, content, createdAt);
+      const result = await db.run(
+        'INSERT INTO messages (sender_id, channel_id, recipient_id, content, created_at) VALUES (?, NULL, ?, ?, ?)',
+        [req.user.user_id, peer.user_id, content, createdAt]
+      );
 
       const message = {
         id: Number(result.lastInsertRowid),
@@ -535,7 +537,7 @@ export function createApp(options = {}) {
   const server = http.createServer(app);
   const wss = new WebSocketServer({ noServer: true });
 
-  server.on('upgrade', (request, socket, head) => {
+  server.on('upgrade', async (request, socket, head) => {
     const url = new URL(request.url, 'http://localhost');
     if (url.pathname !== '/ws') {
       socket.destroy();
@@ -543,7 +545,7 @@ export function createApp(options = {}) {
     }
 
     const cookies = parseCookies(request.headers.cookie);
-    const session = getSession(db, cookies[USER_COOKIE], 'user');
+    const session = await getSession(db, cookies[USER_COOKIE], 'user');
     if (!session) {
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
       socket.destroy();
@@ -569,12 +571,12 @@ export function createApp(options = {}) {
     const wasOffline = userSet.size === 0;
     userSet.add(ws);
 
-    db.prepare('UPDATE users SET last_seen_at = ? WHERE user_id = ?').run(new Date().toISOString(), userId);
+    db.run('UPDATE users SET last_seen_at = ? WHERE user_id = ?', [new Date().toISOString(), userId]).catch(() => {});
     if (wasOffline) {
       broadcastAll({ type: 'presence', userId, online: true });
     }
 
-    ws.on('message', (rawData) => {
+    ws.on('message', async (rawData) => {
       let data;
       try {
         data = JSON.parse(rawData.toString());
@@ -583,7 +585,7 @@ export function createApp(options = {}) {
       }
 
       // Re-verify user is still active on every message
-      const freshUser = db.prepare('SELECT user_id, display_name, is_active FROM users WHERE user_id = ?').get(userId);
+      const freshUser = await db.get('SELECT user_id, display_name, is_active FROM users WHERE user_id = ?', [userId]);
       if (!freshUser || !freshUser.is_active) {
         kickUser(userId, 'Account is no longer active.');
         return;
@@ -598,12 +600,13 @@ export function createApp(options = {}) {
         const createdAt = new Date().toISOString();
 
         if (channelId) {
-          const channel = db.prepare('SELECT id FROM channels WHERE id = ?').get(channelId);
+          const channel = await db.get('SELECT id FROM channels WHERE id = ?', [channelId]);
           if (!channel) return;
 
-          const result = db
-            .prepare('INSERT INTO messages (sender_id, channel_id, recipient_id, content, created_at) VALUES (?, ?, NULL, ?, ?)')
-            .run(userId, channel.id, content, createdAt);
+          const result = await db.run(
+            'INSERT INTO messages (sender_id, channel_id, recipient_id, content, created_at) VALUES (?, ?, NULL, ?, ?)',
+            [userId, channel.id, content, createdAt]
+          );
 
           const message = {
             id: Number(result.lastInsertRowid),
@@ -616,14 +619,13 @@ export function createApp(options = {}) {
           };
           broadcastAll({ type: 'message', message });
         } else if (recipientId) {
-          const peer = db
-            .prepare('SELECT user_id, is_active FROM users WHERE user_id = ?')
-            .get(recipientId);
+          const peer = await db.get('SELECT user_id, is_active FROM users WHERE user_id = ?', [recipientId]);
           if (!peer || !peer.is_active) return;
 
-          const result = db
-            .prepare('INSERT INTO messages (sender_id, channel_id, recipient_id, content, created_at) VALUES (?, NULL, ?, ?, ?)')
-            .run(userId, peer.user_id, content, createdAt);
+          const result = await db.run(
+            'INSERT INTO messages (sender_id, channel_id, recipient_id, content, created_at) VALUES (?, NULL, ?, ?, ?)',
+            [userId, peer.user_id, content, createdAt]
+          );
 
           const message = {
             id: Number(result.lastInsertRowid),
@@ -671,7 +673,7 @@ export function createApp(options = {}) {
         set.delete(ws);
         if (set.size === 0) {
           onlineSockets.delete(userId);
-          db.prepare('UPDATE users SET last_seen_at = ? WHERE user_id = ?').run(new Date().toISOString(), userId);
+          db.run('UPDATE users SET last_seen_at = ? WHERE user_id = ?', [new Date().toISOString(), userId]).catch(() => {});
           broadcastAll({ type: 'presence', userId, online: false });
         }
       }

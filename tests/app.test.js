@@ -32,7 +32,7 @@ describe('SendIt invite-only chat application', () => {
 
   after(async () => {
     await new Promise((resolve) => server.close(resolve));
-    db.close();
+    await db.close();
   });
 
   it('has no self-registration endpoint and rejects unknown users', async () => {

@@ -12,10 +12,15 @@
     "dev": "node --watch server.js",
     "test": "node --test tests/app.test.js"
   },
-  "keywords": ["chat", "websocket", "invite-only"],
+  "keywords": [
+    "chat",
+    "websocket",
+    "invite-only"
+  ],
   "license": "ISC",
   "dependencies": {
     "express": "^5.1.0",
+    "pg": "^8.23.1",
     "ws": "^8.18.0"
   }
 }

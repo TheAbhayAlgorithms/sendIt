@@ -29,12 +29,11 @@ export function verifyPin(pin, salt, expectedHash) {
 /**
  * Generates a readable unique User ID like USR-4829.
  */
-export function generateUserId(db) {
-  const checkStmt = db.prepare('SELECT 1 FROM users WHERE user_id = ?');
+export async function generateUserId(db) {
   for (let i = 0; i < 20; i++) {
     const num = crypto.randomInt(1000, 9999);
     const candidate = `USR-${num}`;
-    if (!checkStmt.get(candidate)) return candidate;
+    if (!(await db.get('SELECT 1 FROM users WHERE user_id = ?', [candidate]))) return candidate;
   }
   return `USR-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
 }
@@ -58,43 +57,46 @@ export function hashToken(token) {
 }
 
 /**
- * Creates a new session in SQLite and returns the raw token.
+ * Creates a new session in the database and returns the raw token.
  */
-export function createSession(db, { userId = null, role }) {
+export async function createSession(db, { userId = null, role }) {
   const rawToken = crypto.randomBytes(32).toString('hex');
   const tokenHash = hashToken(rawToken);
   const now = new Date();
   const expiresAt = new Date(now.getTime() + SESSION_TTL_MS);
 
-  db.prepare(
-    'INSERT INTO sessions (token_hash, user_id, role, created_at, expires_at) VALUES (?, ?, ?, ?, ?)'
-  ).run(tokenHash, userId, role, now.toISOString(), expiresAt.toISOString());
+  await db.run(
+    'INSERT INTO sessions (token_hash, user_id, role, created_at, expires_at) VALUES (?, ?, ?, ?, ?)',
+    [tokenHash, userId, role, now.toISOString(), expiresAt.toISOString()]
+  );
 
   return { rawToken, expiresAt };
 }
 
 /**
- * Validates a raw session token against SQLite.
+ * Validates a raw session token against the database.
  */
-export function getSession(db, rawToken, expectedRole) {
+export async function getSession(db, rawToken, expectedRole) {
   if (!rawToken || typeof rawToken !== 'string') return null;
   const tokenHash = hashToken(rawToken);
-  const session = db
-    .prepare('SELECT token_hash, user_id, role, expires_at FROM sessions WHERE token_hash = ?')
-    .get(tokenHash);
+  const session = await db.get(
+    'SELECT token_hash, user_id, role, expires_at FROM sessions WHERE token_hash = ?',
+    [tokenHash]
+  );
 
   if (!session || session.role !== expectedRole) return null;
   if (new Date(session.expires_at).getTime() <= Date.now()) {
-    db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(tokenHash);
+    await db.run('DELETE FROM sessions WHERE token_hash = ?', [tokenHash]);
     return null;
   }
 
   if (expectedRole === 'user') {
-    const user = db
-      .prepare('SELECT user_id, display_name, is_active FROM users WHERE user_id = ?')
-      .get(session.user_id);
+    const user = await db.get(
+      'SELECT user_id, display_name, is_active FROM users WHERE user_id = ?',
+      [session.user_id]
+    );
     if (!user || !user.is_active) {
-      db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(tokenHash);
+      await db.run('DELETE FROM sessions WHERE token_hash = ?', [tokenHash]);
       return null;
     }
     return { ...session, user };
@@ -106,16 +108,16 @@ export function getSession(db, rawToken, expectedRole) {
 /**
  * Deletes a single session by raw token.
  */
-export function deleteSession(db, rawToken) {
+export async function deleteSession(db, rawToken) {
   if (!rawToken) return;
-  db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(hashToken(rawToken));
+  await db.run('DELETE FROM sessions WHERE token_hash = ?', [hashToken(rawToken)]);
 }
 
 /**
  * Deletes all sessions belonging to a specific user.
  */
-export function deleteUserSessions(db, userId) {
-  db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
+export async function deleteUserSessions(db, userId) {
+  await db.run('DELETE FROM sessions WHERE user_id = ?', [userId]);
 }
 
 /**
