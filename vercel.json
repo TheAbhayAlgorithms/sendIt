@@ -1,8 +1,9 @@
 {
   "version": 2,
-  "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/index.js?__path=:path*" },
-    { "source": "/healthz", "destination": "/api/index.js?__path=healthz" },
-    { "source": "/admin", "destination": "/admin.html" }
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/index.js?__path=$1" },
+    { "src": "/healthz", "dest": "/api/index.js?__path=healthz" },
+    { "src": "/admin", "dest": "/admin.html" },
+    { "handle": "filesystem" }
   ]
 }

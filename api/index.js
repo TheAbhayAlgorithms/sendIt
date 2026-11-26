@@ -10,6 +10,9 @@ export default function handler(req, res) {
     const qs = url.searchParams.toString();
     const prefix = pathParam === 'healthz' ? '/' : '/api/';
     req.url = `${prefix}${pathParam}${qs ? `?${qs}` : ''}`;
+  } else if (req.url === '/api/index.js') {
+    const orig = req.headers['x-vercel-original-url'] || req.headers['x-forwarded-uri'] || req.headers['x-invoke-path'];
+    if (orig) req.url = orig;
   }
   console.log('[vercel-api]', req.method, req.url);
   return app(req, res);
