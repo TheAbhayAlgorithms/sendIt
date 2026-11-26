@@ -2,11 +2,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
+const DEFAULT_DB_PATH = process.env.VERCEL
+  ? path.join('/tmp', 'sendit-data', 'sendit.db')
+  : path.join(process.cwd(), 'data', 'sendit.db');
+
 /**
  * Opens and initializes the SQLite database with required schema.
  * @param {string} dbPath
  */
-export function createDatabase(dbPath = path.join(process.cwd(), 'data', 'sendit.db')) {
+export function createDatabase(dbPath = DEFAULT_DB_PATH) {
   if (dbPath !== ':memory:') {
     fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   }

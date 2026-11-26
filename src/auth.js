@@ -133,10 +133,14 @@ export function parseCookies(cookieHeader = '') {
   return cookies;
 }
 
+const DEFAULT_DATA_DIR = process.env.VERCEL
+  ? path.join('/tmp', 'sendit-data')
+  : path.join(process.cwd(), 'data');
+
 /**
  * Resolves the admin secret from env or persisted data/admin.secret file.
  */
-export function resolveAdminSecret(dataDir = path.join(process.cwd(), 'data')) {
+export function resolveAdminSecret(dataDir = DEFAULT_DATA_DIR) {
   if (process.env.ADMIN_SECRET && process.env.ADMIN_SECRET.trim().length > 0) {
     return process.env.ADMIN_SECRET.trim();
   }

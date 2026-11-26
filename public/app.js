@@ -296,6 +296,11 @@ function scrollToBottom() {
 }
 
 function connectWebSocket() {
+  if (location.hostname.endsWith('.vercel.app')) {
+    startHttpPollingFallback();
+    return;
+  }
+
   if (state.ws) {
     state.ws.onclose = null;
     state.ws.close();
