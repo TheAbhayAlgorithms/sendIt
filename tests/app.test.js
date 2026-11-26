@@ -111,7 +111,7 @@ describe('SendIt invite-only chat application', () => {
     assert.equal(bobLogin.status, 200);
     const bobCookie = extractCookie(bobLogin, 'sendit_session');
 
-    // 4. Connect both over WebSocket and exchange a channel message + DM
+    // 4. Connect both over WebSocket and exchange direct messages
     const wsAlice = new WebSocket(`${wsBaseUrl}/ws`, { headers: { Cookie: aliceCookie } });
     const wsBob = new WebSocket(`${wsBaseUrl}/ws`, { headers: { Cookie: bobCookie } });
 
@@ -119,20 +119,6 @@ describe('SendIt invite-only chat application', () => {
       new Promise((resolve) => wsAlice.once('open', resolve)),
       new Promise((resolve) => wsBob.once('open', resolve)),
     ]);
-
-    const bobReceivedChannel = new Promise((resolve) => {
-      wsBob.on('message', (raw) => {
-        const msg = JSON.parse(raw.toString());
-        if (msg.type === 'message' && msg.message.channelId === 'general') {
-          resolve(msg.message);
-        }
-      });
-    });
-
-    wsAlice.send(JSON.stringify({ type: 'send_message', channelId: 'general', content: 'Hello team!' }));
-    const channelMsg = await bobReceivedChannel;
-    assert.equal(channelMsg.content, 'Hello team!');
-    assert.equal(channelMsg.senderName, 'Alice');
 
     const aliceReceivedDm = new Promise((resolve) => {
       wsAlice.on('message', (raw) => {
@@ -154,12 +140,13 @@ describe('SendIt invite-only chat application', () => {
     assert.equal(dmMsg.content, 'Hey Alice, secret DM!');
 
     // 5. Verify persistence via REST API
-    const historyRes = await fetch(`${baseUrl}/api/chat/messages?channelId=general`, {
-      headers: { Cookie: bobCookie },
-    });
+    const historyRes = await fetch(
+      `${baseUrl}/api/chat/messages?dmWith=${encodeURIComponent(aliceData.credentials.userId)}`,
+      { headers: { Cookie: bobCookie } }
+    );
     const history = await historyRes.json();
     assert.equal(history.messages.length, 1);
-    assert.equal(history.messages[0].content, 'Hello team!');
+    assert.equal(history.messages[0].content, 'Hey Alice, secret DM!');
 
     // 6. Admin disables Bob -> Bob's WS is kicked and Bob can no longer login
     const bobKicked = new Promise((resolve) => {

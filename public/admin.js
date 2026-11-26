@@ -35,11 +35,6 @@ const credPin = document.getElementById('cred-pin');
 const copyCredBtn = document.getElementById('copy-cred-btn');
 
 const usersTbody = document.getElementById('users-tbody');
-const addChannelForm = document.getElementById('add-channel-form');
-const channelError = document.getElementById('channel-error');
-const newChannelName = document.getElementById('new-channel-name');
-const newChannelDesc = document.getElementById('new-channel-desc');
-const channelsTbody = document.getElementById('channels-tbody');
 
 let lastCredentials = null;
 
@@ -78,10 +73,7 @@ logoutBtn.addEventListener('click', async () => {
 });
 
 async function loadDashboard() {
-  const [{ users }, { channels }] = await Promise.all([
-    api('/api/admin/users'),
-    api('/api/admin/channels'),
-  ]);
+  const { users } = await api('/api/admin/users');
 
   loginView.classList.add('hidden');
   dashboardView.classList.remove('hidden');
@@ -91,7 +83,6 @@ async function loadDashboard() {
   statOnline.textContent = users.filter((u) => u.online).length;
 
   renderUsersTable(users);
-  renderChannelsTable(channels);
 }
 
 function showCredentials(heading, credentials) {
@@ -206,58 +197,6 @@ function renderUsersTable(users) {
     usersTbody.appendChild(tr);
   }
 }
-
-function renderChannelsTable(channels) {
-  channelsTbody.innerHTML = '';
-  for (const ch of channels) {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td class="mono">#${escapeHtml(ch.name)}</td>
-      <td style="color: var(--text-muted);">${escapeHtml(ch.description || '—')}</td>
-      <td class="actions-cell"></td>
-    `;
-
-    const actionsTd = tr.querySelector('.actions-cell');
-    if (ch.id.toLowerCase() === 'general') {
-      const tag = document.createElement('span');
-      tag.style.fontSize = '12px';
-      tag.style.color = 'var(--text-muted)';
-      tag.textContent = 'Default';
-      actionsTd.appendChild(tag);
-    } else {
-      const delBtn = document.createElement('button');
-      delBtn.className = 'btn btn-danger btn-sm';
-      delBtn.textContent = 'Delete';
-      delBtn.addEventListener('click', async () => {
-        if (!confirm(`Delete channel #${ch.name} and all its messages?`)) return;
-        await api(`/api/admin/channels/${encodeURIComponent(ch.id)}`, { method: 'DELETE' });
-        await loadDashboard();
-      });
-      actionsTd.appendChild(delBtn);
-    }
-    channelsTbody.appendChild(tr);
-  }
-}
-
-addChannelForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  channelError.classList.add('hidden');
-  try {
-    await api('/api/admin/channels', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: newChannelName.value.trim(),
-        description: newChannelDesc.value.trim(),
-      }),
-    });
-    newChannelName.value = '';
-    newChannelDesc.value = '';
-    await loadDashboard();
-  } catch (err) {
-    channelError.textContent = err.message;
-    channelError.classList.remove('hidden');
-  }
-});
 
 function escapeHtml(str) {
   return String(str)

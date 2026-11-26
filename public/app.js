@@ -10,7 +10,6 @@ const loginSubmit = document.getElementById('login-submit');
 const sidebar = document.getElementById('sidebar');
 const openSidebarBtn = document.getElementById('open-sidebar-btn');
 const closeSidebarBtn = document.getElementById('close-sidebar-btn');
-const channelsList = document.getElementById('channels-list');
 const usersList = document.getElementById('users-list');
 const meNameEl = document.getElementById('me-name');
 const meIdEl = document.getElementById('me-id');
@@ -25,20 +24,15 @@ const messageInput = document.getElementById('message-input');
 
 const state = {
   user: null,
-  channels: [],
   users: [],
-  activeTarget: { type: 'channel', id: 'general' },
-  unread: new Map(), // key: 'channel:id' or 'dm:userId' -> count
+  activePeerId: null,
+  unread: new Map(), // userId -> count
   typingUsers: new Map(), // userId -> { displayName, timeoutId }
   ws: null,
   reconnectTimer: null,
   wsFailures: 0,
   pollTimer: null,
 };
-
-function targetKey(type, id) {
-  return `${type}:${id}`;
-}
 
 function showError(msg) {
   loginError.textContent = msg;
@@ -125,7 +119,6 @@ function teardownChat(notice) {
 async function enterChat() {
   const data = await api('/api/chat/bootstrap');
   state.user = data.user;
-  state.channels = data.channels;
   state.users = data.users;
   state.unread.clear();
 
@@ -135,8 +128,9 @@ async function enterChat() {
   loginView.classList.add('hidden');
   chatView.classList.remove('hidden');
 
-  if (!state.channels.some((c) => c.id === state.activeTarget.id) && state.channels.length > 0) {
-    state.activeTarget = { type: 'channel', id: state.channels[0].id };
+  const peers = state.users.filter((u) => u.userId !== state.user.userId);
+  if (!state.activePeerId || !peers.some((p) => p.userId === state.activePeerId)) {
+    state.activePeerId = peers.length > 0 ? peers[0].userId : null;
   }
 
   renderSidebar();
@@ -145,31 +139,6 @@ async function enterChat() {
 }
 
 function renderSidebar() {
-  channelsList.innerHTML = '';
-  for (const ch of state.channels) {
-    const btn = document.createElement('button');
-    btn.className = 'nav-item';
-    if (state.activeTarget.type === 'channel' && state.activeTarget.id === ch.id) {
-      btn.classList.add('active');
-    }
-
-    const left = document.createElement('span');
-    left.className = 'nav-item-left';
-    left.innerHTML = `<span class="mono">#</span><span class="nav-item-label">${escapeHtml(ch.name)}</span>`;
-    btn.appendChild(left);
-
-    const unread = state.unread.get(targetKey('channel', ch.id)) || 0;
-    if (unread > 0) {
-      const badge = document.createElement('span');
-      badge.className = 'unread-badge';
-      badge.textContent = unread;
-      btn.appendChild(badge);
-    }
-
-    btn.addEventListener('click', () => selectTarget('channel', ch.id));
-    channelsList.appendChild(btn);
-  }
-
   usersList.innerHTML = '';
   const peers = state.users.filter((u) => u.userId !== state.user.userId);
   if (peers.length === 0) {
@@ -185,7 +154,7 @@ function renderSidebar() {
   for (const u of peers) {
     const btn = document.createElement('button');
     btn.className = 'nav-item';
-    if (state.activeTarget.type === 'dm' && state.activeTarget.id === u.userId) {
+    if (state.activePeerId === u.userId) {
       btn.classList.add('active');
     }
 
@@ -197,7 +166,7 @@ function renderSidebar() {
     `;
     btn.appendChild(left);
 
-    const unread = state.unread.get(targetKey('dm', u.userId)) || 0;
+    const unread = state.unread.get(u.userId) || 0;
     if (unread > 0) {
       const badge = document.createElement('span');
       badge.className = 'unread-badge';
@@ -205,14 +174,14 @@ function renderSidebar() {
       btn.appendChild(badge);
     }
 
-    btn.addEventListener('click', () => selectTarget('dm', u.userId));
+    btn.addEventListener('click', () => selectPeer(u.userId));
     usersList.appendChild(btn);
   }
 }
 
-async function selectTarget(type, id) {
-  state.activeTarget = { type, id };
-  state.unread.delete(targetKey(type, id));
+async function selectPeer(userId) {
+  state.activePeerId = userId;
+  state.unread.delete(userId);
   state.typingUsers.clear();
   renderTypingBar();
   sidebar.classList.remove('open');
@@ -222,29 +191,30 @@ async function selectTarget(type, id) {
 }
 
 function updateHeader() {
-  if (state.activeTarget.type === 'channel') {
-    const ch = state.channels.find((c) => c.id === state.activeTarget.id);
-    chatTitle.textContent = `#${ch ? ch.name : state.activeTarget.id}`;
-    chatSubtitle.textContent = ch?.description || 'Channel';
-    messageInput.placeholder = `Message #${ch ? ch.name : state.activeTarget.id}`;
-  } else {
-    const peer = state.users.find((u) => u.userId === state.activeTarget.id);
-    chatTitle.textContent = peer ? peer.displayName : state.activeTarget.id;
-    chatSubtitle.textContent = peer
-      ? `${peer.userId} • ${peer.online ? 'Online' : 'Offline'}`
-      : 'Direct Message';
-    messageInput.placeholder = `Message ${peer ? peer.displayName : state.activeTarget.id}`;
+  if (!state.activePeerId) {
+    chatTitle.textContent = 'No chats yet';
+    chatSubtitle.textContent = 'Wait for another user to be added';
+    messageInput.placeholder = 'Select a user to message...';
+    messageInput.disabled = true;
+    return;
   }
+  messageInput.disabled = false;
+  const peer = state.users.find((u) => u.userId === state.activePeerId);
+  chatTitle.textContent = peer ? peer.displayName : state.activePeerId;
+  chatSubtitle.textContent = peer
+    ? `${peer.userId} • ${peer.online ? 'Online' : 'Offline'}`
+    : 'Direct Message';
+  messageInput.placeholder = `Message ${peer ? peer.displayName : state.activePeerId}`;
 }
 
 async function loadMessages() {
   updateHeader();
-  const query =
-    state.activeTarget.type === 'channel'
-      ? `channelId=${encodeURIComponent(state.activeTarget.id)}`
-      : `dmWith=${encodeURIComponent(state.activeTarget.id)}`;
+  if (!state.activePeerId) {
+    messagesContainer.innerHTML = '<div class="empty-state">No other users available to chat with yet.</div>';
+    return;
+  }
 
-  const { messages } = await api(`/api/chat/messages?${query}&limit=80`);
+  const { messages } = await api(`/api/chat/messages?dmWith=${encodeURIComponent(state.activePeerId)}&limit=80`);
   messagesContainer.innerHTML = '';
   if (messages.length === 0) {
     messagesContainer.innerHTML = '<div class="empty-state">No messages here yet. Say hello!</div>';
@@ -340,11 +310,15 @@ function connectWebSocket() {
       return;
     }
 
-    if (data.type === 'users_updated' || data.type === 'channels_updated') {
+    if (data.type === 'users_updated') {
       const fresh = await api('/api/chat/bootstrap').catch(() => null);
       if (fresh) {
-        state.channels = fresh.channels;
         state.users = fresh.users;
+        const peers = state.users.filter((u) => u.userId !== state.user.userId);
+        if (!state.activePeerId && peers.length > 0) {
+          state.activePeerId = peers[0].userId;
+          await loadMessages();
+        }
         renderSidebar();
         updateHeader();
       }
@@ -352,15 +326,7 @@ function connectWebSocket() {
     }
 
     if (data.type === 'typing') {
-      if (data.userId === state.user.userId) return;
-      const matchesChannel =
-        state.activeTarget.type === 'channel' && data.channelId === state.activeTarget.id;
-      const matchesDm =
-        state.activeTarget.type === 'dm' &&
-        !data.channelId &&
-        data.userId === state.activeTarget.id;
-
-      if (!matchesChannel && !matchesDm) return;
+      if (data.userId === state.user.userId || data.userId !== state.activePeerId) return;
 
       const existing = state.typingUsers.get(data.userId);
       if (existing) clearTimeout(existing.timeoutId);
@@ -380,12 +346,9 @@ function connectWebSocket() {
 
     if (data.type === 'message') {
       const msg = data.message;
-      const isChannelMsg = Boolean(msg.channelId);
-
-      const belongsToCurrent = isChannelMsg
-        ? state.activeTarget.type === 'channel' && state.activeTarget.id === msg.channelId
-        : state.activeTarget.type === 'dm' &&
-          (msg.senderId === state.activeTarget.id || msg.recipientId === state.activeTarget.id);
+      const belongsToCurrent =
+        state.activePeerId &&
+        (msg.senderId === state.activePeerId || msg.recipientId === state.activePeerId);
 
       if (belongsToCurrent) {
         appendMessageElement(msg);
@@ -393,10 +356,7 @@ function connectWebSocket() {
         state.typingUsers.delete(msg.senderId);
         renderTypingBar();
       } else if (msg.senderId !== state.user.userId) {
-        const key = isChannelMsg
-          ? targetKey('channel', msg.channelId)
-          : targetKey('dm', msg.senderId);
-        state.unread.set(key, (state.unread.get(key) || 0) + 1);
+        state.unread.set(msg.senderId, (state.unread.get(msg.senderId) || 0) + 1);
         renderSidebar();
       }
     }
@@ -440,12 +400,9 @@ function renderTypingBar() {
 
 let typingStopTimer = null;
 messageInput.addEventListener('input', () => {
-  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+  if (!state.activePeerId || !state.ws || state.ws.readyState !== WebSocket.OPEN) return;
 
-  const payload =
-    state.activeTarget.type === 'channel'
-      ? { type: 'typing', channelId: state.activeTarget.id, isTyping: true }
-      : { type: 'typing', recipientId: state.activeTarget.id, isTyping: true };
+  const payload = { type: 'typing', recipientId: state.activePeerId, isTyping: true };
   state.ws.send(JSON.stringify(payload));
 
   clearTimeout(typingStopTimer);
@@ -465,12 +422,9 @@ messageInput.addEventListener('keydown', (e) => {
 composerForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const content = messageInput.value.trim();
-  if (!content) return;
+  if (!content || !state.activePeerId) return;
 
-  const payload =
-    state.activeTarget.type === 'channel'
-      ? { channelId: state.activeTarget.id, content }
-      : { recipientId: state.activeTarget.id, content };
+  const payload = { recipientId: state.activePeerId, content };
 
   if (state.ws && state.ws.readyState === WebSocket.OPEN) {
     state.ws.send(JSON.stringify({ type: 'send_message', ...payload }));

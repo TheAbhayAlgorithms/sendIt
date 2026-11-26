@@ -357,58 +357,9 @@ export function createApp(options = {}) {
     res.json({ ok: true });
   });
 
-  app.get('/api/admin/channels', requireAdmin, async (req, res) => {
-    const channels = await db.all('SELECT id, name, description, created_at FROM channels ORDER BY created_at ASC');
-    res.json({ channels });
-  });
-
-  app.post('/api/admin/channels', requireAdmin, async (req, res) => {
-    const rawName = typeof req.body?.name === 'string' ? req.body.name.trim().toLowerCase() : '';
-    const description = typeof req.body?.description === 'string' ? req.body.description.trim().slice(0, 120) : '';
-    const slug = rawName.replace(/\s+/g, '-');
-
-    if (!/^[a-z0-9-]{2,30}$/.test(slug)) {
-      return res.status(400).json({ error: 'Channel name must be 2-30 lowercase letters, numbers, or hyphens' });
-    }
-
-    const exists = await db.get('SELECT 1 FROM channels WHERE id = ?', [slug]);
-    if (exists) {
-      return res.status(409).json({ error: `Channel #${slug} already exists` });
-    }
-
-    const createdAt = new Date().toISOString();
-    await db.run('INSERT INTO channels (id, name, description, created_at) VALUES (?, ?, ?, ?)', [
-      slug,
-      slug,
-      description,
-      createdAt,
-    ]);
-
-    const channel = { id: slug, name: slug, description, created_at: createdAt };
-    broadcastAll({ type: 'channels_updated', channel });
-    res.status(201).json({ channel });
-  });
-
-  app.delete('/api/admin/channels/:channelId', requireAdmin, async (req, res) => {
-    const channelId = String(req.params.channelId || '').trim().toLowerCase();
-    if (channelId === 'general') {
-      return res.status(400).json({ error: 'Cannot delete the default #general channel' });
-    }
-
-    const channel = await db.get('SELECT id FROM channels WHERE id = ?', [channelId]);
-    if (!channel) {
-      return res.status(404).json({ error: 'Channel not found' });
-    }
-
-    await db.run('DELETE FROM channels WHERE id = ?', [channel.id]);
-    broadcastAll({ type: 'channels_updated' });
-    res.json({ ok: true });
-  });
-
   // -------------------- Chat API --------------------
 
   app.get('/api/chat/bootstrap', requireUser, async (req, res) => {
-    const channels = await db.all('SELECT id, name, description FROM channels ORDER BY created_at ASC');
     const userRows = await db.all(
       'SELECT user_id, display_name, last_seen_at FROM users WHERE is_active = 1 ORDER BY display_name ASC'
     );
@@ -426,55 +377,36 @@ export function createApp(options = {}) {
         userId: req.user.user_id,
         displayName: req.user.display_name,
       },
-      channels,
       users,
     });
   });
 
   app.get('/api/chat/messages', requireUser, async (req, res) => {
-    const channelId = typeof req.query.channelId === 'string' ? req.query.channelId.trim() : '';
     const dmWith = typeof req.query.dmWith === 'string' ? req.query.dmWith.trim() : '';
     const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 50));
 
-    if (!channelId && !dmWith) {
-      return res.status(400).json({ error: 'Provide channelId or dmWith' });
+    if (!dmWith) {
+      return res.status(400).json({ error: 'Provide dmWith' });
     }
 
-    let rows;
-    if (channelId) {
-      const channel = await db.get('SELECT id FROM channels WHERE id = ?', [channelId]);
-      if (!channel) return res.status(404).json({ error: 'Channel not found' });
+    const peer = await db.get('SELECT user_id FROM users WHERE user_id = ?', [dmWith]);
+    if (!peer) return res.status(404).json({ error: 'User not found' });
 
-      rows = await db.all(
-        `SELECT m.id, m.sender_id, u.display_name AS sender_name, m.channel_id, m.recipient_id, m.content, m.created_at
-         FROM messages m
-         JOIN users u ON u.user_id = m.sender_id
-         WHERE m.channel_id = ?
-         ORDER BY m.id DESC
-         LIMIT ?`,
-        [channel.id, limit]
-      );
-    } else {
-      const peer = await db.get('SELECT user_id FROM users WHERE user_id = ?', [dmWith]);
-      if (!peer) return res.status(404).json({ error: 'User not found' });
-
-      rows = await db.all(
-        `SELECT m.id, m.sender_id, u.display_name AS sender_name, m.channel_id, m.recipient_id, m.content, m.created_at
-         FROM messages m
-         JOIN users u ON u.user_id = m.sender_id
-         WHERE m.channel_id IS NULL
-           AND ((m.sender_id = ? AND m.recipient_id = ?) OR (m.sender_id = ? AND m.recipient_id = ?))
-         ORDER BY m.id DESC
-         LIMIT ?`,
-        [req.user.user_id, peer.user_id, peer.user_id, req.user.user_id, limit]
-      );
-    }
+    const rows = await db.all(
+      `SELECT m.id, m.sender_id, u.display_name AS sender_name, m.recipient_id, m.content, m.created_at
+       FROM messages m
+       JOIN users u ON u.user_id = m.sender_id
+       WHERE m.channel_id IS NULL
+         AND ((m.sender_id = ? AND m.recipient_id = ?) OR (m.sender_id = ? AND m.recipient_id = ?))
+       ORDER BY m.id DESC
+       LIMIT ?`,
+      [req.user.user_id, peer.user_id, peer.user_id, req.user.user_id, limit]
+    );
 
     const messages = rows.reverse().map((r) => ({
       id: r.id,
       senderId: r.sender_id,
       senderName: r.sender_name,
-      channelId: r.channel_id,
       recipientId: r.recipient_id,
       content: r.content,
       createdAt: r.created_at,
@@ -489,58 +421,33 @@ export function createApp(options = {}) {
       return res.status(400).json({ error: 'Message content must be 1-2000 characters' });
     }
 
-    const channelId = typeof req.body?.channelId === 'string' ? req.body.channelId.trim() : '';
     const recipientId = typeof req.body?.recipientId === 'string' ? req.body.recipientId.trim() : '';
+    if (!recipientId) {
+      return res.status(400).json({ error: 'Provide recipientId' });
+    }
+
+    const peer = await db.get('SELECT user_id, is_active FROM users WHERE user_id = ?', [recipientId]);
+    if (!peer || !peer.is_active) return res.status(404).json({ error: 'Recipient not found' });
+
     const createdAt = new Date().toISOString();
+    const result = await db.run(
+      'INSERT INTO messages (sender_id, channel_id, recipient_id, content, created_at) VALUES (?, NULL, ?, ?, ?)',
+      [req.user.user_id, peer.user_id, content, createdAt]
+    );
 
-    if (channelId) {
-      const channel = await db.get('SELECT id FROM channels WHERE id = ?', [channelId]);
-      if (!channel) return res.status(404).json({ error: 'Channel not found' });
-
-      const result = await db.run(
-        'INSERT INTO messages (sender_id, channel_id, recipient_id, content, created_at) VALUES (?, ?, NULL, ?, ?)',
-        [req.user.user_id, channel.id, content, createdAt]
-      );
-
-      const message = {
-        id: Number(result.lastInsertRowid),
-        senderId: req.user.user_id,
-        senderName: req.user.display_name,
-        channelId: channel.id,
-        recipientId: null,
-        content,
-        createdAt,
-      };
-      broadcastAll({ type: 'message', message });
-      return res.status(201).json({ message });
+    const message = {
+      id: Number(result.lastInsertRowid),
+      senderId: req.user.user_id,
+      senderName: req.user.display_name,
+      recipientId: peer.user_id,
+      content,
+      createdAt,
+    };
+    sendToUser(req.user.user_id, { type: 'message', message });
+    if (peer.user_id !== req.user.user_id) {
+      sendToUser(peer.user_id, { type: 'message', message });
     }
-
-    if (recipientId) {
-      const peer = await db.get('SELECT user_id, is_active FROM users WHERE user_id = ?', [recipientId]);
-      if (!peer || !peer.is_active) return res.status(404).json({ error: 'Recipient not found' });
-
-      const result = await db.run(
-        'INSERT INTO messages (sender_id, channel_id, recipient_id, content, created_at) VALUES (?, NULL, ?, ?, ?)',
-        [req.user.user_id, peer.user_id, content, createdAt]
-      );
-
-      const message = {
-        id: Number(result.lastInsertRowid),
-        senderId: req.user.user_id,
-        senderName: req.user.display_name,
-        channelId: null,
-        recipientId: peer.user_id,
-        content,
-        createdAt,
-      };
-      sendToUser(req.user.user_id, { type: 'message', message });
-      if (peer.user_id !== req.user.user_id) {
-        sendToUser(peer.user_id, { type: 'message', message });
-      }
-      return res.status(201).json({ message });
-    }
-
-    return res.status(400).json({ error: 'Provide channelId or recipientId' });
+    return res.status(201).json({ message });
   });
 
   // Explicit route for /admin without .html
@@ -611,67 +518,36 @@ export function createApp(options = {}) {
         const content = typeof data.content === 'string' ? data.content.trim() : '';
         if (!content || content.length > 2000) return;
 
-        const channelId = typeof data.channelId === 'string' ? data.channelId.trim() : '';
         const recipientId = typeof data.recipientId === 'string' ? data.recipientId.trim() : '';
+        if (!recipientId) return;
+
+        const peer = await db.get('SELECT user_id, is_active FROM users WHERE user_id = ?', [recipientId]);
+        if (!peer || !peer.is_active) return;
+
         const createdAt = new Date().toISOString();
+        const result = await db.run(
+          'INSERT INTO messages (sender_id, channel_id, recipient_id, content, created_at) VALUES (?, NULL, ?, ?, ?)',
+          [userId, peer.user_id, content, createdAt]
+        );
 
-        if (channelId) {
-          const channel = await db.get('SELECT id FROM channels WHERE id = ?', [channelId]);
-          if (!channel) return;
+        const message = {
+          id: Number(result.lastInsertRowid),
+          senderId: userId,
+          senderName: freshUser.display_name,
+          recipientId: peer.user_id,
+          content,
+          createdAt,
+        };
 
-          const result = await db.run(
-            'INSERT INTO messages (sender_id, channel_id, recipient_id, content, created_at) VALUES (?, ?, NULL, ?, ?)',
-            [userId, channel.id, content, createdAt]
-          );
-
-          const message = {
-            id: Number(result.lastInsertRowid),
-            senderId: userId,
-            senderName: freshUser.display_name,
-            channelId: channel.id,
-            recipientId: null,
-            content,
-            createdAt,
-          };
-          broadcastAll({ type: 'message', message });
-        } else if (recipientId) {
-          const peer = await db.get('SELECT user_id, is_active FROM users WHERE user_id = ?', [recipientId]);
-          if (!peer || !peer.is_active) return;
-
-          const result = await db.run(
-            'INSERT INTO messages (sender_id, channel_id, recipient_id, content, created_at) VALUES (?, NULL, ?, ?, ?)',
-            [userId, peer.user_id, content, createdAt]
-          );
-
-          const message = {
-            id: Number(result.lastInsertRowid),
-            senderId: userId,
-            senderName: freshUser.display_name,
-            channelId: null,
-            recipientId: peer.user_id,
-            content,
-            createdAt,
-          };
-
-          sendToUser(userId, { type: 'message', message });
-          if (peer.user_id !== userId) {
-            sendToUser(peer.user_id, { type: 'message', message });
-          }
+        sendToUser(userId, { type: 'message', message });
+        if (peer.user_id !== userId) {
+          sendToUser(peer.user_id, { type: 'message', message });
         }
       } else if (data.type === 'typing') {
         const isTyping = Boolean(data.isTyping);
-        const channelId = typeof data.channelId === 'string' ? data.channelId.trim() : '';
         const recipientId = typeof data.recipientId === 'string' ? data.recipientId.trim() : '';
 
-        if (channelId) {
-          broadcastAll({
-            type: 'typing',
-            userId,
-            displayName: freshUser.display_name,
-            channelId,
-            isTyping,
-          });
-        } else if (recipientId) {
+        if (recipientId) {
           sendToUser(recipientId, {
             type: 'typing',
             userId,
