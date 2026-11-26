@@ -11,5 +11,6 @@ export default function handler(req, res) {
     const prefix = pathParam === 'healthz' ? '/' : '/api/';
     req.url = `${prefix}${pathParam}${qs ? `?${qs}` : ''}`;
   }
+  console.log('[vercel-api]', req.method, req.url);
   return app(req, res);
 }
