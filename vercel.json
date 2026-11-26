@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "framework": null,
-  "outputDirectory": "public",
   "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/index.js?__path=:path*" },
+    { "source": "/healthz", "destination": "/api/index.js?__path=healthz" },
     { "source": "/admin", "destination": "/admin.html" }
   ]
 }
