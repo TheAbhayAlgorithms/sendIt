@@ -141,8 +141,12 @@ const DEFAULT_DATA_DIR = process.env.VERCEL
  * Resolves the admin secret from env or persisted data/admin.secret file.
  */
 export function resolveAdminSecret(dataDir = DEFAULT_DATA_DIR) {
-  if (process.env.ADMIN_SECRET && process.env.ADMIN_SECRET.trim().length > 0) {
-    return process.env.ADMIN_SECRET.trim();
+  const envSecret =
+    process.env.ADMIN_SECRET ||
+    process.env.ADMIN_PASSWORD ||
+    process.env.ADMIN_KEY;
+  if (envSecret && envSecret.trim().length > 0) {
+    return envSecret.trim();
   }
   fs.mkdirSync(dataDir, { recursive: true });
   const secretFile = path.join(dataDir, 'admin.secret');
