@@ -1,4 +1,4 @@
-import { createApp } from './src/app.js';
+import { createApp } from './src/createApp.js';
 
 const PORT = Number.parseInt(process.env.PORT, 10) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';

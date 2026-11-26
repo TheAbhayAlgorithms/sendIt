@@ -1,7 +1,7 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { WebSocket } from 'ws';
-import { createApp } from '../src/app.js';
+import { createApp } from '../src/createApp.js';
 
 function extractCookie(res, name) {
   const setCookies = res.headers.getSetCookie ? res.headers.getSetCookie() : [];
