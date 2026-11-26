@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Minimal Chat UI Showcase</title>
+  <link rel="stylesheet" href="/design-showcase.css" />
+</head>
+<body>
+  <main class="showcase-stage">
+    <!-- Pure CSS toggle for collapsible sidebar (desktop) / single-view switch (mobile) -->
+    <input type="checkbox" id="sidebar-toggle" class="sidebar-toggle-input" aria-label="Toggle conversation sidebar" />
+
+    <div class="chat-shell">
+      <!-- ==================== LEFT CONVERSATION SIDEBAR ==================== -->
+      <aside class="sidebar" aria-label="Conversations">
+        <div class="sidebar-top">
+          <span class="workspace-title">Messages</span>
+          <label for="sidebar-toggle" class="icon-btn" title="Collapse sidebar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="3" />
+              <path d="M9 3v18" />
+            </svg>
+          </label>
+        </div>
+
+        <div class="search-container">
+          <div class="search-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+            <input type="search" placeholder="Search conversations..." aria-label="Search conversations" />
+          </div>
+        </div>
+
+        <div class="conversation-list">
+          <div class="list-section-label">Pinned</div>
+
+          <div class="conv-row active">
+            <div class="avatar av-indigo">
+              EV
+              <span class="presence-dot" aria-label="Online"></span>
+            </div>
+            <div class="conv-body">
+              <div class="conv-top">
+                <span class="conv-name">Elena Vance</span>
+                <span class="conv-time">10:42 AM</span>
+              </div>
+              <div class="conv-bottom">
+                <span class="conv-preview">Updated the spacing tokens in Figma</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="conv-row unread">
+            <div class="avatar av-teal">
+              MK
+              <span class="presence-dot" aria-label="Online"></span>
+            </div>
+            <div class="conv-body">
+              <div class="conv-top">
+                <span class="conv-name">Marcus Kim</span>
+                <span class="conv-time">9:18 AM</span>
+              </div>
+              <div class="conv-bottom">
+                <span class="conv-preview">Can we review the typography scale?</span>
+                <span class="unread-pill">2</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="list-section-label">Recent</div>
+
+          <div class="conv-row">
+            <div class="avatar av-slate">PD</div>
+            <div class="conv-body">
+              <div class="conv-top">
+                <span class="conv-name">Product Design</span>
+                <span class="conv-time">Yesterday</span>
+              </div>
+              <div class="conv-bottom">
+                <span class="conv-preview">Nora: Looks super clean on mobile</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="conv-row unread">
+            <div class="avatar av-amber">
+              SL
+              <span class="presence-dot" aria-label="Online"></span>
+            </div>
+            <div class="conv-body">
+              <div class="conv-top">
+                <span class="conv-name">Sofia Lindqvist</span>
+                <span class="conv-time">Yesterday</span>
+              </div>
+              <div class="conv-bottom">
+                <span class="conv-preview">Sent the revised icon set</span>
+                <span class="unread-pill">1</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="conv-row">
+            <div class="avatar av-rose">JR</div>
+            <div class="conv-body">
+              <div class="conv-top">
+                <span class="conv-name">Julian Ross</span>
+                <span class="conv-time">Tue</span>
+              </div>
+              <div class="conv-bottom">
+                <span class="conv-preview">Sounds good, let’s ship Friday</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- ==================== MAIN ACTIVE CHAT PANE ==================== -->
+      <section class="chat-pane" aria-label="Active conversation">
+        <header class="chat-header">
+          <div class="header-contact">
+            <label for="sidebar-toggle" class="icon-btn expand-sidebar-btn" title="Show conversations">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+            </label>
+
+            <div class="avatar avatar-sm av-indigo">
+              EV
+              <span class="presence-dot" aria-label="Online"></span>
+            </div>
+
+            <div class="header-meta">
+              <div class="header-name">Elena Vance</div>
+              <div class="header-status">Active now</div>
+            </div>
+          </div>
+
+          <div class="header-actions">
+            <button type="button" class="icon-btn" title="Search in conversation">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" />
+              </svg>
+            </button>
+            <button type="button" class="icon-btn" title="Voice call">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.58 2.81.7A2 2 0 0 1 22 16.92z" />
+              </svg>
+            </button>
+            <button type="button" class="icon-btn" title="Conversation details">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 16v-4" />
+                <path d="M12 8h.01" />
+              </svg>
+            </button>
+          </div>
+        </header>
+
+        <div class="message-stream">
+          <div class="date-divider"><span>Today</span></div>
+
+          <!-- Incoming Message Group -->
+          <div class="msg-group incoming">
+            <div class="avatar avatar-xs av-indigo">EV</div>
+            <div class="msg-stack">
+              <div class="bubble">
+                Morning! I just finished refining the alabaster canvas and neutral bubble contrast.
+              </div>
+              <div class="bubble">
+                The 15px body size with 1.48 line-height feels much calmer to scan.
+              </div>
+              <div class="msg-meta">10:38 AM</div>
+            </div>
+          </div>
+
+          <!-- Outgoing Message Group -->
+          <div class="msg-group outgoing">
+            <div class="msg-stack">
+              <div class="bubble">
+                Agreed — the muted indigo accent pairs really well with the cool off-white surface.
+              </div>
+              <div class="bubble">
+                Let’s keep the composer floating at the bottom with subtle hairline borders.
+              </div>
+              <div class="msg-meta">10:40 AM · Read</div>
+            </div>
+          </div>
+
+          <!-- Incoming Single Message -->
+          <div class="msg-group incoming">
+            <div class="avatar avatar-xs av-indigo">EV</div>
+            <div class="msg-stack">
+              <div class="bubble">
+                Updated the spacing tokens in Figma so desktop and mobile share the same rhythm.
+              </div>
+              <div class="msg-meta">10:42 AM</div>
+            </div>
+          </div>
+
+          <!-- Typing Indicator Placeholder -->
+          <div class="typing-row" aria-label="Elena Vance is typing">
+            <div class="avatar avatar-xs av-indigo">EV</div>
+            <div class="typing-bubble">
+              <span class="typing-dot"></span>
+              <span class="typing-dot"></span>
+              <span class="typing-dot"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom Floating Composer Bar -->
+        <div class="composer-wrap">
+          <div class="composer-bar">
+            <button type="button" class="icon-btn" title="Attach file">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+              </svg>
+            </button>
+
+            <button type="button" class="icon-btn" title="Insert emoji">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+                <line x1="9" y1="9" x2="9.01" y2="9" />
+                <line x1="15" y1="9" x2="15.01" y2="9" />
+              </svg>
+            </button>
+
+            <input
+              type="text"
+              class="composer-input"
+              placeholder="Write a message..."
+              aria-label="Message input"
+            />
+
+            <button type="button" class="send-btn">
+              <span>Send</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m22 2-7 20-4-9-9-4Z" />
+                <path d="M22 2 11 13" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>
