@@ -226,10 +226,10 @@ function applyTheme(theme) {
   });
 }
 
-applyTheme(localStorage.getItem('sendit_theme') || 'light');
+applyTheme(localStorage.getItem('sendit_theme') || 'dark');
 document.querySelectorAll('[data-theme-toggle]').forEach((btn) => {
   btn.addEventListener('click', () => {
-    const current = document.documentElement.getAttribute('data-theme') || 'light';
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
     applyTheme(current === 'dark' ? 'light' : 'dark');
   });
 });

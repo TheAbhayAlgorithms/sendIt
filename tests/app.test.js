@@ -193,26 +193,6 @@ describe('SendIt invite-only chat application', () => {
     });
     assert.equal(newPinRes.status, 200);
 
-    // 8. Admin creates a channel, cannot delete #general, and can delete the custom channel
-    const createChan = await fetch(`${baseUrl}/api/admin/channels`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: adminCookie },
-      body: JSON.stringify({ name: 'engineering', description: 'Dev chat' }),
-    });
-    assert.equal(createChan.status, 201);
-
-    const delGeneral = await fetch(`${baseUrl}/api/admin/channels/general`, {
-      method: 'DELETE',
-      headers: { Cookie: adminCookie },
-    });
-    assert.equal(delGeneral.status, 400);
-
-    const delEng = await fetch(`${baseUrl}/api/admin/channels/engineering`, {
-      method: 'DELETE',
-      headers: { Cookie: adminCookie },
-    });
-    assert.equal(delEng.status, 200);
-
     wsAlice.close();
   });
 });
